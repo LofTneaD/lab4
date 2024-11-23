@@ -44,12 +44,13 @@ namespace lab4
 
         private void Button2_Click(object sender, RoutedEventArgs e)
         {
-
+            
         }
 
         private void Button3_Click(object sender, RoutedEventArgs e)
         {
-
+            TextSorting textSortingWindow = new TextSorting();
+            textSortingWindow.Show();
         }
     }
 }
