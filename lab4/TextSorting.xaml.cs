@@ -6,118 +6,154 @@ namespace lab4;
 
 public partial class TextSorting : Window
 {
+    
     public TextSorting()
     {
         InitializeComponent();
     }
+
     // Merge Sort
-        private List<string> MergeSort(List<string> words)
+    private List<string> MergeSort(List<string> words)
+    {
+        if (words.Count <= 1) return words;
+
+        int mid = words.Count / 2;
+        var left = MergeSort(words.GetRange(0, mid));
+        var right = MergeSort(words.GetRange(mid, words.Count - mid));
+
+        return Merge(left, right);
+    }
+
+    private List<string> Merge(List<string> left, List<string> right)
+    {
+        List<string> result = new();
+        int i = 0, j = 0;
+
+        while (i < left.Count && j < right.Count)
         {
-            if (words.Count <= 1) return words;
-
-            int mid = words.Count / 2;
-            var left = MergeSort(words.GetRange(0, mid));
-            var right = MergeSort(words.GetRange(mid, words.Count - mid));
-
-            return Merge(left, right);
+            if (string.Compare(left[i], right[j], StringComparison.Ordinal) <= 0)
+            {
+                result.Add(left[i]);
+                i++;
+            }
+            else
+            {
+                result.Add(right[j]);
+                j++;
+            }
         }
 
-        private List<string> Merge(List<string> left, List<string> right)
-        {
-            List<string> result = new();
-            int i = 0, j = 0;
+        result.AddRange(left.Skip(i));
+        result.AddRange(right.Skip(j));
+        return result;
+    }
 
-            while (i < left.Count && j < right.Count)
+    // Radix Sort
+    private List<string> RadixSort(List<string> words)
+    {
+        // Найти максимальную длину слова
+        int maxLength = words.Max(w => w.Length);
+
+        // Итерируем по разрядам, начиная с последнего символа
+        for (int i = maxLength - 1; i >= 0; i--)
+        {
+            // Создаем корзины (одна для каждого ASCII символа + 1 для "пустых" символов)
+            var buckets = new List<string>[257];
+            for (int j = 0; j < 257; j++)
             {
-                if (string.Compare(left[i], right[j], StringComparison.Ordinal) <= 0)
-                {
-                    result.Add(left[i]);
-                    i++;
-                }
-                else
-                {
-                    result.Add(right[j]);
-                    j++;
-                }
+                buckets[j] = new List<string>();
             }
 
-            result.AddRange(left.Skip(i));
-            result.AddRange(right.Skip(j));
-            return result;
-        }
-
-        // Radix Sort
-        private List<string> RadixSort(List<string> words)
-        {
-            int maxLength = words.Max(w => w.Length);
-            for (int i = maxLength - 1; i >= 0; i--)
+            // Распределяем слова по корзинам
+            foreach (var word in words)
             {
-                var buckets = new List<string>[256];
-                for (int j = 0; j < 256; j++) buckets[j] = new List<string>();
+                // Если индекс выходит за пределы слова, символ считается "нулевым"
+                int charIndex = i < word.Length ? word[i] + 1 : 0;
 
-                foreach (var word in words)
-                {
-                    int charIndex = i < word.Length ? word[i] : 0;
-                    buckets[charIndex].Add(word);
-                }
-
-                words = buckets.SelectMany(b => b).ToList();
+                // Добавляем слово в соответствующую корзину
+                buckets[charIndex].Add(word);
             }
 
-            return words;
+            // Объединяем все корзины обратно в список
+            words = buckets.SelectMany(b => b).ToList();
         }
 
-        // Count word frequencies
-        private Dictionary<string, int> CountWords(List<string> sortedWords)
+        return words;
+    }
+
+
+    // Count word frequencies
+    private Dictionary<string, int> CountWords(List<string> sortedWords)
+    {
+        Dictionary<string, int> wordCounts = new();
+        foreach (var word in sortedWords)
         {
-            Dictionary<string, int> wordCounts = new();
-            foreach (var word in sortedWords)
-            {
-                if (wordCounts.ContainsKey(word))
-                    wordCounts[word]++;
-                else
-                    wordCounts[word] = 1;
-            }
-            return wordCounts;
+            if (wordCounts.ContainsKey(word))
+                wordCounts[word]++;
+            else
+                wordCounts[word] = 1;
         }
 
-        // Event handlers for sorting
-        private void SortMerge_Click(object sender, RoutedEventArgs e)
+        return wordCounts;
+    }
+
+    // Event handlers for sorting
+    private void SortMerge_Click(object sender, RoutedEventArgs e)
+    {
+        ProcessTextAndSort(MergeSort);
+    }
+
+    private void SortRadix_Click(object sender, RoutedEventArgs e)
+    {
+        ProcessTextAndSort(RadixSort);
+    }
+
+    private List<string> CleanText(string text)
+    {
+        // Удаляем все лишние символы (оставляем только буквы и цифры)
+        var words = Regex.Matches(text.ToLower(), @"\b\w+\b")
+            .Cast<Match>()
+            .Select(m => m.Value)
+            .ToList();
+        return words;
+    }
+
+    // Process input, sort, and display results
+    private void ProcessTextAndSort(Func<List<string>, List<string>> sortAlgorithm)
+    {
+        string inputText = InputTextBox.Text;
+        if (string.IsNullOrWhiteSpace(inputText))
         {
-            ProcessTextAndSort(MergeSort);
+            MessageBox.Show("Please enter some text.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
 
-        private void SortRadix_Click(object sender, RoutedEventArgs e)
+        // Очищаем текст
+        var words = CleanText(inputText);
+
+        if (words.Count == 0)
         {
-            ProcessTextAndSort(RadixSort);
+            MessageBox.Show("No valid words found after cleaning the text.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
 
-        // Process input, sort, and display results
-        private void ProcessTextAndSort(Func<List<string>, List<string>> sortAlgorithm)
+        // Замер времени сортировки
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        var sortedWords = sortAlgorithm(words);
+        stopwatch.Stop();
+
+        double elapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+        Console.WriteLine($"Radix Sort completed in {elapsedMilliseconds:F3} ms.");
+
+
+        // Подсчитываем частоту слов
+        var wordCounts = CountWords(sortedWords);
+
+        // Выводим результаты
+        OutputTextBox.Text = string.Join("\n", wordCounts.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+        TimingResultsGrid.ItemsSource = new[]
         {
-            string inputText = InputTextBox.Text;
-            if (string.IsNullOrWhiteSpace(inputText))
-            {
-                MessageBox.Show("Please enter some text.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            // Split text into words
-            var words = Regex.Split(inputText, @"\W+").Where(w => !string.IsNullOrEmpty(w)).ToList();
-
-            // Measure sorting time
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            var sortedWords = sortAlgorithm(words);
-            stopwatch.Stop();
-
-            // Count word frequencies
-            var wordCounts = CountWords(sortedWords);
-
-            // Display results
-            OutputTextBox.Text = string.Join("\n", wordCounts.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
-            TimingResultsGrid.ItemsSource = new[]
-            {
-                new { Algorithm = sortAlgorithm.Method.Name, Time = stopwatch.ElapsedMilliseconds + " ms" }
-            };
-        }
+            new { Algorithm = sortAlgorithm.Method.Name, Time = $"{stopwatch.ElapsedMilliseconds} ms" }
+        };
+    }
 }
