@@ -13,7 +13,7 @@
             <Button x:Name="Button1_3" Content="QuickSort" Click="Button1_3_Click" Margin="5" Width="127"/>
             <Button x:Name="Button1_4" Content="TimSort" Click="Button1_4_Click" Margin="5" Width="127"/>
         </StackPanel>
-        <Button x:Name="Button2" Content="TaskTwo" Click="Button2_Click" Margin="10"/>
+        <Button x:Name="Button2" Content="ExternalSort" Click="Button2_Click" Margin="10"/>
         <Button x:Name="Button3" Content="TaskThree" Click="Button3_Click" Margin="10"/>
     </StackPanel>
 </Window>
