@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -40,11 +40,6 @@ namespace lab4
         {
             TimSortWindow timSortWindow = new TimSortWindow();
             timSortWindow.Show();
-        }
-
-        private void Button2_Click(object sender, RoutedEventArgs e)
-        {
-            
         }
 
         private void Button3_Click(object sender, RoutedEventArgs e)
