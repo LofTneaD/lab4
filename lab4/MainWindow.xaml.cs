@@ -44,7 +44,8 @@ namespace lab4
 
         private void Button2_Click(object sender, RoutedEventArgs e)
         {
-
+            ExternalSortApp S2 = new ExternalSortApp();
+            S2.Show();
         }
 
         private void Button3_Click(object sender, RoutedEventArgs e)
