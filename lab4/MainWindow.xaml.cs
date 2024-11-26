@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -42,15 +42,10 @@ namespace lab4
             timSortWindow.Show();
         }
 
-        private void Button2_Click(object sender, RoutedEventArgs e)
-        {
-            ExternalSortApp S2 = new ExternalSortApp();
-            S2.Show();
-        }
-
         private void Button3_Click(object sender, RoutedEventArgs e)
         {
-
+            TextSorting textSortingWindow = new TextSorting();
+            textSortingWindow.Show();
         }
     }
 }
