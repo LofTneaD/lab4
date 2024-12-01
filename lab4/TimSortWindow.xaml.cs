@@ -23,23 +23,25 @@ namespace lab4
         {
             InitializeComponent();
         }
+
         int[] ourArray;
-        private int delayMilliseconds = 100; // Значение задержки по умолчанию        
+        private int delayMilliseconds = 100; // Значение задержки по умолчанию
 
         private void GenerateMassiveButton_Click(object sender, RoutedEventArgs e)
         {
             GenerateMassiveInputPanel.Visibility = Visibility.Visible;
             GenerateMassiveInputBox.Focus();
         }
+
         private void ConfirmGenerateMassiveButton_Click(object sender, RoutedEventArgs e)
         {
             string input = GenerateMassiveInputBox.Text.Trim();
 
             if (!string.IsNullOrEmpty(input))
             {
-                AddColoredText("Сгенерирован массив с длинной : " + input + "\n", Colors.DarkGreen);
-
+                AddColoredText("Сгенерирован массив с длиной: " + input + "\n", Colors.DarkGreen);
                 ourArray = MakeMassive(Int32.Parse(input));
+                DisplayBars(); // Отображаем начальный массив
             }
             GenerateMassiveInputBox.Clear();
             GenerateMassiveInputPanel.Visibility = Visibility.Collapsed;
@@ -51,14 +53,13 @@ namespace lab4
             {
                 AddColoredText("Начало сортировки" + "\n", Colors.DarkGreen);
                 await Task.Delay(delayMilliseconds);
-                AddColoredText("Задаём минимальный размер подмассивов(RUN), которые будут сортироваться с помощью сортировки вставками." + "\n", Colors.Orange);
+                AddColoredText("Задаём минимальный размер подмассивов (RUN), которые будут сортироваться с помощью сортировки вставками." + "\n", Colors.Orange);
                 await Task.Delay(delayMilliseconds);
-                Run(ourArray);
+                await TimSort(ourArray, ourArray.Length);  // Обновлено: вызываем метод с асинхронной задержкой
             }
             else
                 AddColoredText("Массив не сгенерирован" + "\n", Colors.Red);
         }
-
 
         private void DelaySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
@@ -105,7 +106,6 @@ namespace lab4
                 Foreground = new SolidColorBrush(color)
             };
 
-            // Берем первый параграф, если он уже существует, иначе создаем новый
             if (LogBox.Document.Blocks.FirstBlock is Paragraph paragraph)
             {
                 paragraph.Inlines.Add(coloredRun);
@@ -114,92 +114,90 @@ namespace lab4
             {
                 paragraph = new Paragraph(coloredRun)
                 {
-                    Margin = new Thickness(0) // Убираем отступы
+                    Margin = new Thickness(0)
                 };
                 LogBox.Document.Blocks.Add(paragraph);
             }
         }
 
-
-
-
         const int RUN = 32; // Минимальный размер руна
-        public async void Run(int[] array)
-        {
-            TimSort(array, array.Length);
-        }
 
-        async void TimSort(int[] array, int n)
+        public async Task TimSort(int[] array, int n)
         {
-            AddColoredText("Разбиваем массив на подмассивы длиной RUN, которые сортируются с использованием сортировки вставками." + "\n", Colors.Orange);             
+            AddColoredText("1. Разбиваем массив на подмассивы длиной RUN для сортировки с помощью сортировки вставками." + "\n", Colors.Orange);
+
+            // Сортируем все руны (подмассивы)
             for (int i = 0; i < n; i += RUN)
             {
-                InsertionSort(array, i, Math.Min(i + RUN - 1, n - 1));
+                AddColoredText($"Сортируем подмассив с индекса {i} до {Math.Min(i + RUN - 1, n - 1)} с помощью сортировки вставками." + "\n", Colors.Orange);
+                await InsertionSort(array, i, Math.Min(i + RUN - 1, n - 1));
+                DisplayBars(); // Обновляем визуализацию после сортировки вставками
+                await Task.Delay(delayMilliseconds);  // Добавляем задержку после каждой операции сортировки
             }
+
             await Task.Delay(delayMilliseconds);
-            AddColoredText("Объединяем отсортированные руны с помощью сортировки слиянием" + "\n", Colors.Orange);            
-            for (int size = RUN; size < n; size = 2 * size)
+            AddColoredText("2. Объединяем отсортированные руны с помощью сортировки слиянием." + "\n", Colors.Orange);
+
+            // Объединяем руны с использованием сортировки слиянием
+            int size = RUN;
+            while (size < n)
             {
+                AddColoredText($"Слияние блоков с размером {size}." + "\n", Colors.Purple);
                 for (int left = 0; left < n; left += 2 * size)
                 {
-                    int mid = left + size - 1;
+                    int mid = Math.Min(left + size - 1, n - 1);
                     int right = Math.Min((left + 2 * size - 1), (n - 1));
                     if (mid < right)
-                        Merge(array, left, mid, right);
+                    {
+                        await Merge(array, left, mid, right); // Делаем слияние с задержкой
+                        DisplayBars(); // Обновляем визуализацию после слияния
+                        await Task.Delay(delayMilliseconds);  // Задержка после слияния
+                    }
                 }
+                size *= 2;  // Удваиваем размер блока
             }
+
+            // Финальный вывод
+            AddColoredText("Сортировка завершена!" + "\n", Colors.Green);
+            await Task.Delay(delayMilliseconds);
         }
+
         // Сортировка вставками
-        async void InsertionSort(int[] array, int left, int right)
+        public async Task InsertionSort(int[] array, int left, int right)
         {
+            AddColoredText($"Сортировка вставками подмассива с индексами от {left} до {right}." + "\n", Colors.Orange);
             for (int i = left + 1; i <= right; i++)
             {
                 await Task.Delay(delayMilliseconds);
-                AddColoredText("Сохраняем текущий элемент, который нужно вставить в отсортированную часть массива" + "\n", Colors.Orange);
                 int temp = array[i];
-                await Task.Delay(delayMilliseconds);
-                AddColoredText("Помечаем элемент в отсортированной части массива" + "\n", Colors.Orange);
                 int j = i - 1;
 
-                await Task.Delay(delayMilliseconds);
-                AddColoredText("Ищем позицию для вставки элемента" + "\n", Colors.Orange);
-                await Task.Delay(delayMilliseconds);
-                AddColoredText("Проверяем два условия: является ли помеченный элемент больше начального индекса подмассива: чтобы не выйти за пределы отсортированной части." +
-                    "является ли текущий элемент больше, чем элемент, который нужно вставить. Если да, двигаем его вправо." + "\n", Colors.Orange);
                 while (j >= left && array[j] > temp)
                 {
-                    await Task.Delay(delayMilliseconds);
-                    AddColoredText("Сдвигаем текущий элемент на одну позицию вправо, освобождая место для вставки." + "\n", Colors.Orange);
                     array[j + 1] = array[j];
                     j--;
                 }
                 array[j + 1] = temp;
-                await Task.Delay(delayMilliseconds);
-                AddColoredText("Вставляем наш элемент." + "\n", Colors.Orange);
+
+                DisplayBars(i, j); // Обновляем визуализацию после вставки, подсвечивая активные элементы
             }
         }
 
         // Слияние двух подмассивов
-        async void Merge(int[] array, int left, int mid, int right)
+        public async Task Merge(int[] array, int left, int mid, int right)
         {
-            await Task.Delay(delayMilliseconds);
-            AddColoredText("Создаем временные массивы для левой и правой половин" + "\n", Colors.Orange);            
+            AddColoredText($"Слияние подмассивов: от {left} до {mid} и от {mid + 1} до {right}." + "\n", Colors.Green);
             int len1 = mid - left + 1;
             int len2 = right - mid;
             int[] leftArray = new int[len1];
             int[] rightArray = new int[len2];
 
-            await Task.Delay(delayMilliseconds);
-            AddColoredText("Копируем данные во временные массивы" + "\n", Colors.Orange);
             for (int x = 0; x < len1; x++)
                 leftArray[x] = array[left + x];
             for (int x = 0; x < len2; x++)
                 rightArray[x] = array[mid + 1 + x];
 
-            // Индексы для левой, правой половин и основного массива
             int i = 0, j = 0, k = left;
-            await Task.Delay(delayMilliseconds);
-            AddColoredText("Сливаем два массива" + "\n", Colors.Orange);
             while (i < len1 && j < len2)
             {
                 if (leftArray[i] <= rightArray[j])
@@ -214,8 +212,7 @@ namespace lab4
                 }
                 k++;
             }
-            await Task.Delay(delayMilliseconds);
-            AddColoredText("Копируем оставшиеся элементы" + "\n", Colors.Orange);
+
             while (i < len1)
             {
                 array[k] = leftArray[i];
@@ -229,6 +226,41 @@ namespace lab4
                 j++;
                 k++;
             }
+
+            DisplayBars(); // Обновляем визуализацию после слияния
+        }
+
+        // Визуализация с подсветкой активных элементов
+        private void DisplayBars(int highlightedIndex1 = -1, int highlightedIndex2 = -1)
+        {
+            // Очищаем Canvas перед отрисовкой новых столбиков
+            VisualizationCanvas.Children.Clear();
+
+            double barWidth = VisualizationCanvas.ActualWidth / ourArray.Length;  // Ширина одного столбика
+            double canvasHeight = VisualizationCanvas.ActualHeight;  // Высота Canvas
+
+            // Находим максимальное значение в массиве для нормализации высоты столбиков
+            int maxValue = ourArray.Max();
+
+            // Перебираем все элементы массива для отрисовки
+            for (int i = 0; i < ourArray.Length; i++)
+            {
+                // Создаем новый прямоугольник (столбик)
+                Rectangle bar = new Rectangle
+                {
+                    Width = barWidth - 2,  // Добавляем небольшой отступ между столбиками
+                    Height = (canvasHeight / maxValue) * ourArray[i],  // Высота столбика пропорциональна значению
+                    Fill = (i == highlightedIndex1 || i == highlightedIndex2) ? new SolidColorBrush(Colors.Red) : new SolidColorBrush(Colors.Blue)  // Подсветка активных элементов
+                };
+
+                // Устанавливаем позицию столбика на Canvas
+                Canvas.SetLeft(bar, i * barWidth);  // Позиция по горизонтали
+                Canvas.SetTop(bar, canvasHeight - bar.Height);  // Позиция по вертикали (снизу)
+
+                // Добавляем столбик на Canvas
+                VisualizationCanvas.Children.Add(bar);
+            }
         }
     }
+
 }

@@ -47,5 +47,11 @@ namespace lab4
             TextSorting textSortingWindow = new TextSorting();
             textSortingWindow.Show();
         }
+
+        private void Button2_Click(object sender, RoutedEventArgs e)
+        {
+            ExternalSortApp externalSortApp = new ExternalSortApp();
+            externalSortApp.Show();
+        }
     }
 }
