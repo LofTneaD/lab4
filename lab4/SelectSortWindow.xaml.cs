@@ -49,7 +49,11 @@ namespace lab4
                 AddColoredText("Сгенерирован массив с длинной : " + input + "\n", Colors.DarkGreen);
 
                 array = MakeMassive(Int32.Parse(input));
+
+                // Отображаем столбики сразу после генерации массива
+                UpdateVisualization();
             }
+
             GenerateMassiveInputBox.Clear();
             GenerateMassiveInputPanel.Visibility = Visibility.Collapsed;
         }
@@ -64,44 +68,56 @@ namespace lab4
         {
             if (array != null)
             {
-                AddColoredText("Начало сортировки" + "\n", Colors.DarkGreen);
+                AddColoredText("Начало сортировки\n", Colors.DarkGreen);
+                UpdateVisualization();
+
                 for (int i = 0; i < array.Length - 1; i++)
                 {
                     int minIndex = i;
-                    AddColoredText("Предположим, что текущий индекс - минимальный" + "\n", Colors.Orange);
-                    await Task.Delay(delayMilliseconds);
-                    AddColoredText("Ищем минимальный элемент в оставшейся части массива. Если найденый элемент меньше текущего, делаем его индекском минимального" + "\n", Colors.Orange);
+                    AddColoredText($"Итерация {i + 1}: Предположим, что элемент с индексом {i} ({array[i]}) минимальный\n", Colors.Orange);
 
                     for (int j = i + 1; j < array.Length; j++)
                     {
-                        AddColoredText("Сравниваются элементы под номерами " + j + " и " + minIndex + "\n", Colors.Black);
+                        // Подсветка сравниваемых столбиков
+                        HighlightBars(i, j, Brushes.Red);
+                        AddColoredText($"Сравниваем элемент с индексом {j} ({array[j]}) и текущий минимальный элемент {minIndex} ({array[minIndex]})\n", Colors.Black);
+
+                        await Task.Delay(delayMilliseconds);
+
                         if (array[j] < array[minIndex])
                         {
-                            AddColoredText("Теперь " + j + "-ый элемент является минимальным" + "\n", Colors.Black);
                             minIndex = j;
+                            AddColoredText($"Найден новый минимальный элемент: индекс {minIndex}, значение {array[minIndex]}\n", Colors.Blue);
                         }
-                    }
-                    await Task.Delay(delayMilliseconds);
-                    AddColoredText("Нашли минимальный элемент" + "\n", Colors.Orange);
 
-                    await Task.Delay(delayMilliseconds);
-                    AddColoredText("Меняем местами текущий элемент и минимальный" + "\n", Colors.Orange);
-                    AddColoredText("Проверяем, не сменился ли минимальный индекс" + "\n", Colors.Black);
+                        // Снять подсветку
+                        HighlightBars(i, j, Brushes.Blue);
+                    }
+
                     if (minIndex != i)
                     {
-                        AddColoredText("Минимальный индекс сменился, меняем элементы" + i + " и " + minIndex + "местами" + "\n", Colors.Black);
+                        // Меняем местами элементы
+                        AddColoredText($"Меняем местами элемент с индексом {i} ({array[i]}) и минимальный элемент с индексом {minIndex} ({array[minIndex]})\n", Colors.Green);
+
+                        SwapBars(i, minIndex);
+                        await Task.Delay(delayMilliseconds);
+
                         int temp = array[i];
                         array[i] = array[minIndex];
                         array[minIndex] = temp;
+
+                        UpdateVisualization();
                     }
-                    await Task.Delay(delayMilliseconds);
-                    AddColoredText("Повторяем для следующего элемента" + "\n", Colors.Orange);
+
+                    AddColoredText($"Итерация {i + 1} завершена. Массив после итерации: {string.Join(", ", array)}\n", Colors.Orange);
                 }
-                await Task.Delay(delayMilliseconds);
-                AddColoredText("Массив отсортирован" + "\n", Colors.DarkGreen);
+
+                AddColoredText("Сортировка завершена! Итоговый массив: " + string.Join(", ", array) + "\n", Colors.DarkGreen);
             }
             else
-                AddColoredText("Массив не сгенерирован" + "\n", Colors.Red);
+            {
+                AddColoredText("Ошибка: Массив не сгенерирован\n", Colors.Red);
+            }
         }
 
 
@@ -154,6 +170,55 @@ namespace lab4
                 };
                 LogBox.Document.Blocks.Add(paragraph);
             }        
+        }
+        private void UpdateVisualization()
+        {
+            VisualizationCanvas.Children.Clear();
+            if (array != null && array.Length > 0)
+            {
+                double canvasWidth = VisualizationCanvas.ActualWidth;
+                double canvasHeight = VisualizationCanvas.ActualHeight;
+                double barWidth = canvasWidth / array.Length;
+                int maxValue = array.Max();
+
+                for (int i = 0; i < array.Length; i++)
+                {
+                    double barHeight = (array[i] / (double)maxValue) * canvasHeight;
+                    Rectangle bar = new Rectangle
+                    {
+                        Width = barWidth - 2, // Зазор между столбиками
+                        Height = barHeight,
+                        Fill = Brushes.Blue
+                    };
+                    Canvas.SetLeft(bar, i * barWidth);
+                    Canvas.SetBottom(bar, 0);
+                    VisualizationCanvas.Children.Add(bar);
+                }
+            }
+        }
+        private void HighlightBars(int index1, int index2, Brush color)
+        {
+            if (VisualizationCanvas.Children[index1] is Rectangle bar1 &&
+                VisualizationCanvas.Children[index2] is Rectangle bar2)
+            {
+                bar1.Fill = color;
+                bar2.Fill = color;
+            }
+        }
+
+        private void SwapBars(int index1, int index2)
+        {
+            // Получаем ссылки на столбики
+            var bar1 = (Rectangle)VisualizationCanvas.Children[index1];
+            var bar2 = (Rectangle)VisualizationCanvas.Children[index2];
+
+            // Получаем текущие координаты столбиков
+            double left1 = Canvas.GetLeft(bar1);
+            double left2 = Canvas.GetLeft(bar2);
+
+            // Меняем визуальные координаты столбиков
+            Canvas.SetLeft(bar1, left2);
+            Canvas.SetLeft(bar2, left1);
         }
     }
 }
