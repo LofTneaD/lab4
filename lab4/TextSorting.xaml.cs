@@ -137,23 +137,50 @@ public partial class TextSorting : Window
             return;
         }
 
+        // Проверяем входные данные
+        if (words == null || words.Count == 0)
+        {
+            MessageBox.Show("No words to sort!", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Создаём копию данных, чтобы избежать изменений в исходном списке
+        var wordsCopy = new List<string>(words);
+
         // Замер времени сортировки
-        Stopwatch stopwatch = Stopwatch.StartNew();
-        var sortedWords = sortAlgorithm(words);
-        stopwatch.Stop();
+        const int runs = 10; // Количество повторов для усреднения
+        double totalElapsedMilliseconds = 0;
 
-        double elapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
-        Console.WriteLine($"Radix Sort completed in {elapsedMilliseconds:F3} ms.");
+        for (int i = 0; i < runs; i++)
+        {
+            // Создаём копию для текущей итерации
+            var tempWords = new List<string>(wordsCopy);
 
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            var sortedWords = sortAlgorithm(tempWords); // Сортировка
+            stopwatch.Stop();
 
-        // Подсчитываем частоту слов
-        var wordCounts = CountWords(sortedWords);
+            totalElapsedMilliseconds += stopwatch.Elapsed.TotalMilliseconds;
+        }
 
-        // Выводим результаты
+        double averageElapsedMilliseconds = totalElapsedMilliseconds / runs;
+
+        // Финальная сортировка для результата
+        var finalSortedWords = sortAlgorithm(wordsCopy);
+
+        // Подсчитываем частоты слов
+        var wordCounts = CountWords(finalSortedWords);
+
+        // Выводим результаты сортировки
         OutputTextBox.Text = string.Join("\n", wordCounts.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+
+        // Обновляем данные в таблице
         TimingResultsGrid.ItemsSource = new[]
         {
-            new { Algorithm = sortAlgorithm.Method.Name, Time = $"{stopwatch.ElapsedMilliseconds} ms" }
+            new { Algorithm = sortAlgorithm.Method.Name, Time = $"{averageElapsedMilliseconds:F3} ms" }
         };
+
+        // Логируем результат
+        Console.WriteLine($"{sortAlgorithm.Method.Name} completed in {averageElapsedMilliseconds:F3} ms (average over {runs} runs).");
     }
 }
