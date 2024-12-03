@@ -58,26 +58,38 @@ public partial class ExternalSortApp : Window
         SortAttributeComboBox.SelectedIndex = 0;
     }
     
-    private async Task DisplaySortingStepsAsync(List<List<Dictionary<string, string>>> blocks, int delay)
+    private async Task DisplaySortingStepsAsync(
+        List<List<Dictionary<string, string>>> blocks,
+        int delay,
+        string attribute = null,
+        List<List<Dictionary<string, string>>> previousBlocks = null)
     {
-        SortingStepsListBox.Items.Clear();
+        SortingStepsListBox.Items.Add("========= Новый шаг ========");
 
-        foreach (var block in blocks)
+        for (int i = 0; i < blocks.Count; i++)
         {
-            // Создаем визуальное разделение между блоками
-            SortingStepsListBox.Items.Add("========= Новый блок ========");
+            SortingStepsListBox.Items.Add($"Блок {i + 1}:");
 
-            foreach (var record in block)
+            for (int j = 0; j < blocks[i].Count; j++)
             {
-                string recordString = string.Join("\n", record.Select(kv => $"{kv.Key}: {kv.Value}"));
+                string recordString = string.Join(", ", blocks[i][j].Values);
+
+                if (previousBlocks != null && i < previousBlocks.Count && j < previousBlocks[i].Count &&
+                    !blocks[i][j][attribute].Equals(previousBlocks[i][j][attribute]))
+                {
+                    // Добавляем цветовую метку, например, через добавление текста в [].
+                    recordString = $"[Изменено] {recordString}";
+                }
+
                 SortingStepsListBox.Items.Add(recordString);
-                SortingStepsListBox.Items.Add("----------------------------------"); // Разделитель между записями
             }
         }
 
-        SortingStepsListBox.ScrollIntoView(SortingStepsListBox.Items[SortingStepsListBox.Items.Count - 1]);
+        SortingStepsListBox.ScrollIntoView(SortingStepsListBox.Items[^1]);
         await Task.Delay(delay);
     }
+
+
 
 
     private async void SortButton_Click(object sender, RoutedEventArgs e)
@@ -122,10 +134,9 @@ public partial class ExternalSortApp : Window
         int delay)
     {
         bool isNumeric = long.TryParse(data.First()[attribute], out _);
-        List<List<Dictionary<string, string>>> blocks = new List<List<Dictionary<string, string>>>();
-        List<Dictionary<string, string>> currentBlock = new List<Dictionary<string, string>>();
+        List<List<Dictionary<string, string>>> blocks = new();
+        List<Dictionary<string, string>> currentBlock = new();
 
-        // Разбиение на естественные блоки
         for (int i = 0; i < data.Count; i++)
         {
             if (i > 0)
@@ -141,7 +152,7 @@ public partial class ExternalSortApp : Window
                 if (isCurrentLess)
                 {
                     blocks.Add(currentBlock);
-                    currentBlock = new List<Dictionary<string, string>>();
+                    currentBlock = new();
                 }
             }
             currentBlock.Add(data[i]);
@@ -150,17 +161,23 @@ public partial class ExternalSortApp : Window
         if (currentBlock.Count > 0)
             blocks.Add(currentBlock);
 
-        await DisplaySortingStepsAsync(blocks, delay);
+        List<List<Dictionary<string, string>>> previousBlocks = null;
 
-        // Многопутевое слияние
+        // Показ начальных блоков
+        await DisplaySortingStepsAsync(blocks, delay, attribute);
+
+        // Выполняем слияние
         while (blocks.Count > 1)
         {
+            previousBlocks = new List<List<Dictionary<string, string>>>(blocks.Select(block => new List<Dictionary<string, string>>(block)));
             blocks = MultiWayMerge(blocks, attribute, isNumeric, ascending);
-            await DisplaySortingStepsAsync(blocks, delay);
+            await DisplaySortingStepsAsync(blocks, delay, attribute, previousBlocks);
         }
 
         return blocks.First();
     }
+
+
 
     private async Task NaturalMergeSortAsync(string attribute, bool ascending, int delay)
     {
