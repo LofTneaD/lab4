@@ -9,7 +9,7 @@
     <Grid>
         <ComboBox x:Name="SortMethodComboBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="200" Margin="10,10,0,0">
             <ComboBoxItem Content="Естественное слияние" Tag="NaturalMerge"/>
-            <ComboBoxItem Content="Прямая сортировка" Tag="DirectSort"/>
+            <ComboBoxItem Content="Прямое слияние" Tag="DirectSort"/>
             <ComboBoxItem Content="Многопутевое слияние" Tag="MultiWayMerge"/>
         </ComboBox>
         
@@ -32,9 +32,32 @@
         
         <Button Content="Сохранить результат" HorizontalAlignment="Left" VerticalAlignment="Top" Width="100" Margin="420,170,0,0" Click="SaveResultButton_Click" />
         
-        <ListBox x:Name="SortingStepsListBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="900" Height="400" Margin="10,210,0,0"/>
+        <ListBox x:Name="SortingStepsListBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="900" Height="400" Margin="10,210,0,0">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding RecordString}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <!-- Условие для желтого цвета -->
+                                    <DataTrigger Binding="{Binding Highlighted}" Value="yellow">
+                                        <Setter Property="Background" Value="Yellow"/>
+                                    </DataTrigger>
+                                    <!-- Условие для зеленого цвета -->
+                                    <DataTrigger Binding="{Binding Highlighted}" Value="green">
+                                        <Setter Property="Background" Value="LightGreen"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
         <Label Content="Задержка (мс):" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10,620,0,0"/>
         <TextBox x:Name="DelayTextBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="100" Margin="120,625,0,0" Text="500"/>
 
+        
     </Grid>
 </Window>
