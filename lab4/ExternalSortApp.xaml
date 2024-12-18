@@ -5,36 +5,27 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:local="clr-namespace:lab4"
         mc:Ignorable="d"
-        Title="ExternalSortApp" Height="750" Width="1000">
-    <Grid>
-        <ComboBox x:Name="SortMethodComboBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="200" Margin="10,10,0,0">
-            <ComboBoxItem Content="Естественное слияние" Tag="NaturalMerge"/>
-            <ComboBoxItem Content="Прямая сортировка" Tag="DirectSort"/>
-            <ComboBoxItem Content="Многопутевое слияние" Tag="MultiWayMerge"/>
-        </ComboBox>
-        
-        <TextBox x:Name="FilePathTextBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="400" Margin="10,50,0,0" />
-        
-        <ComboBox x:Name="SortDirectionComboBox" Width="150" Height="25" Margin="10 96 610 530">
-            <ComboBoxItem Content="По возрастанию" IsSelected="True"/>
-            <ComboBoxItem Content="По убыванию"/>
-        </ComboBox>
+        Title="ExternalSortApp" Height="550" Width="1000">
+    <Grid >
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="230*"/>
+            <ColumnDefinition Width="270*"/>
+        </Grid.ColumnDefinitions>
 
-        <Button Content="Выбрать файл" HorizontalAlignment="Left" VerticalAlignment="Top" Width="100" Margin="420,50,0,0" Click="SelectFileButton_Click" />
+        <Canvas x:Name="SortCanvas" Grid.Column="0" Margin="510,10,-520,10"/>
 
-        <ComboBox x:Name="SortAttributeComboBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="200" Margin="10,90,0,0">
-            <!-- Сюда будут добавлены атрибуты таблицы после загрузки файла -->
-        </ComboBox>
-
-        <Button Content="Сортировать" HorizontalAlignment="Left" VerticalAlignment="Top" Width="100" Margin="10,130,0,0" Click="SortButton_Click" />
-        
-        <TextBox x:Name="OutputFileTextBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="400" Margin="10,170,0,0" IsReadOnly="True" />
-        
-        <Button Content="Сохранить результат" HorizontalAlignment="Left" VerticalAlignment="Top" Width="100" Margin="420,170,0,0" Click="SaveResultButton_Click" />
-        
-        <ListBox x:Name="SortingStepsListBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="900" Height="400" Margin="10,210,0,0"/>
-        <Label Content="Задержка (мс):" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10,620,0,0"/>
-        <TextBox x:Name="DelayTextBox" HorizontalAlignment="Left" VerticalAlignment="Top" Width="100" Margin="120,625,0,0" Text="500"/>
-
+        <StackPanel Grid.Column="1" Margin="-450,10,500,0">
+            <Button x:Name="LoadExcelButton" Content="Загрузка файла" Click="LoadFileButton_Click" Margin="5 5 5 5" />
+            <ComboBox x:Name="ExcelColumnComboBox" Margin="-260 5 5 40" Width="200" />
+            <ComboBox  Margin="250 -61 35 42">
+                <RadioButton x:Name="DirectMergeSortRadioButton" Content="Прямое слияние" />
+                <RadioButton x:Name="NaturalMergeSortRadioButton" Content="Естественное слияние" />
+                <RadioButton x:Name="MultiwayMergeSortRadioButton" Content="Многопутевое слияние" />
+            </ComboBox>
+            <Button x:Name="StartSorting" Content="Начать сортировку" Click="StartSorting_Click" Margin="5" />
+            <Label x:Name="DelayLabel" Content="Задержка: 500 мс" />
+            <Slider x:Name="DelaySlider" Minimum="5" Maximum="3000" Value="500" TickFrequency="10" ValueChanged="DelayChanging" Margin="5"/>
+            <TextBox x:Name="LogTextBox" Margin="10 10 10 10" Height="200" IsReadOnly="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" />
+        </StackPanel>
     </Grid>
 </Window>

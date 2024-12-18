@@ -1,332 +1,517 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using ClosedXML.Excel;
 
 namespace lab4;
 
 public partial class ExternalSortApp : Window
 {
-    private List<Dictionary<string, string>> tableData = new List<Dictionary<string, string>>();
-    private string inputFilePath = "";
-    private string outputFilePath = "";
+    private StringBuilder loger;
+    private int delay;
+    private SolidColorBrush defaultColor = Brushes.Cornsilk;
+    private List<Dictionary<string, string>> table;
+    private string[] headers;
     
     public ExternalSortApp()
     {
         InitializeComponent();
+        loger = new StringBuilder();
+        delay = 450;
     }
-
-    private void SelectFileButton_Click(object sender, RoutedEventArgs e)
+    
+    private void Logs(string message)
+    {
+        loger.AppendLine(message);
+        LogTextBox.Text = loger.ToString();
+        LogTextBox.ScrollToEnd();
+    }
+    
+    private void LoadFileButton_Click(object sender, RoutedEventArgs e)
     {
         var openFileDialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            Filter = "Excel Files (*.xlsx)|*.xlsx|All Files (*.*)|*.*"
         };
 
         if (openFileDialog.ShowDialog() == true)
         {
-            inputFilePath = openFileDialog.FileName;
-            FilePathTextBox.Text = inputFilePath;
-            LoadDataFromFile();
-        }
-    }
-
-    private void LoadDataFromFile()
-    {
-        if (!File.Exists(inputFilePath)) return;
-
-        tableData.Clear();
-        var lines = File.ReadAllLines(inputFilePath);
-        if (lines.Length == 0) return;
-
-        var headers = lines[0].Split(',');
-        foreach (var line in lines.Skip(1))
-        {
-            var values = line.Split(',');
-            var record = new Dictionary<string, string>();
-            for (int i = 0; i < headers.Length; i++)
+            using (var workbook = new XLWorkbook(openFileDialog.FileName))
             {
-                record[headers[i]] = values[i];
-            }
-            tableData.Add(record);
-        }
+                var worksheet = workbook.Worksheet(1);
+                headers = worksheet.FirstRowUsed()
+                    .CellsUsed()
+                    .Select(cell => cell.Value.ToString())
+                    .ToArray();
 
-        // Обновляем ComboBox с атрибутами (столбцами)
-        SortAttributeComboBox.ItemsSource = headers;
-        SortAttributeComboBox.SelectedIndex = 0;
+                table = worksheet.RowsUsed()
+                    .Skip(1)
+                    .Select(row => headers.Zip(row.CellsUsed().Select(cell => cell.Value.ToString()),
+                            (header, value) => new { header, value })
+                        .ToDictionary(x => x.header, x => x.value))
+                    .ToList();
+            }
+
+            ExcelColumnComboBox.ItemsSource = headers;
+            Logs("файл с данными загружен");
+        }
     }
     
-    private async Task DisplaySortingStepsAsync(
-        List<List<Dictionary<string, string>>> blocks,
-        int delay,
-        string attribute = null,
-        List<List<Dictionary<string, string>>> previousBlocks = null)
+    private async void StartSorting_Click(object sender, RoutedEventArgs e)
     {
-        SortingStepsListBox.Items.Add("========= Новый шаг ========");
-
-        for (int i = 0; i < blocks.Count; i++)
+            
+        if (table == null || headers == null || ExcelColumnComboBox.SelectedItem == null)
         {
-            SortingStepsListBox.Items.Add($"Блок {i + 1}:");
-
-            for (int j = 0; j < blocks[i].Count; j++)
-            {
-                string recordString = string.Join(", ", blocks[i][j].Values);
-
-                if (previousBlocks != null && i < previousBlocks.Count && j < previousBlocks[i].Count &&
-                    !blocks[i][j][attribute].Equals(previousBlocks[i][j][attribute]))
-                {
-                    // Добавляем цветовую метку, например, через добавление текста в [].
-                    recordString = $"[Изменено] {recordString}";
-                }
-
-                SortingStepsListBox.Items.Add(recordString);
-            }
-        }
-
-        SortingStepsListBox.ScrollIntoView(SortingStepsListBox.Items[^1]);
-        await Task.Delay(delay);
-    }
-
-
-
-
-    private async void SortButton_Click(object sender, RoutedEventArgs e)
-    {
-        string selectedAttribute = SortAttributeComboBox.SelectedItem.ToString();
-        string sortDirection = ((ComboBoxItem)SortDirectionComboBox.SelectedItem).Content.ToString();
-        bool ascending = sortDirection == "По возрастанию";
-
-        if (!int.TryParse(DelayTextBox.Text, out int delay))
-        {
-            MessageBox.Show("Введите корректное значение задержки.");
+            Logs("Не выбран файл или колонка для сортировки.");
             return;
         }
 
-        string selectedMethod = ((ComboBoxItem)SortMethodComboBox.SelectedItem).Tag.ToString();
+        StartSorting.IsEnabled = false;
+        string sortKey = ExcelColumnComboBox.SelectedItem.ToString();
+        Logs($"Сортировка по колонке: {sortKey}");
 
-        switch (selectedMethod)
+        if (DirectMergeSortRadioButton.IsChecked == true)
         {
-            case "NaturalMerge":
-                await NaturalMergeSortAsync(selectedAttribute, ascending, delay);
-                break;
-            case "DirectSort":
-                tableData = await DirectSortAsync(tableData, selectedAttribute, ascending, delay);
-                MessageBox.Show("Прямая сортировка завершена!");
-                break;
-            case "MultiWayMerge":
-                await MultiWayMergeSortAsync(selectedAttribute, ascending, delay);
-                MessageBox.Show("Многопутевое слияние завершено!");
-                break;
-
-            default:
-                MessageBox.Show("Выберите метод сортировки.");
-                break;
+            await DirectMergeSort(table, sortKey);
         }
+        else if (NaturalMergeSortRadioButton.IsChecked == true)
+        {
+            await NaturalMergeSort(table, sortKey);
+
+        }
+        else if (MultiwayMergeSortRadioButton.IsChecked == true)
+        {
+            await MultiWayMergeSort(table, sortKey);
+        }
+
+        Logs("Сортировка завершена.");
+        StartSorting.IsEnabled = true;
+    }
+    
+    private void DelayChanging(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        delay = (int)e.NewValue;
+        DelayLabel.Content = $"Задержка: {delay} мс"; 
+    }
+    
+    private async Task VisualCondition(List<Dictionary<string, string>> file1, List<Dictionary<string, string>> file2, List<Dictionary<string, string>> file3, List<Dictionary<string, string>> file4, string sortKey, Dictionary<string, string> highlighted2 = null, Dictionary<string, string> highlighted3 = null, Dictionary<string, string> highlighted4 = null, Dictionary<string, string> highlighted1 = null, List<Dictionary<string, string>> highlightedSeries2 = null, List<Dictionary<string, string>> highlightedSeries3 = null, List<Dictionary<string, string>> highlightedSeries4 = null)
+    {
+        SortCanvas.Children.Clear();
+        double canvasWidth = SortCanvas.ActualWidth;
+        double blockWidth = canvasWidth / 4;
+
+        DrawingBlock(file1, blockWidth, 0, "1", sortKey, highlighted1, Brushes.Turquoise);
+        DrawingBlock(file2, blockWidth, blockWidth, "2", sortKey, highlighted2, Brushes.Turquoise, highlightedSeries2, Brushes.MediumSeaGreen);
+        DrawingBlock(file3, blockWidth, 2 * blockWidth, "3", sortKey, highlighted3, Brushes.PapayaWhip, highlightedSeries3, Brushes.BurlyWood);
+        DrawingBlock(file4, blockWidth, 3 * blockWidth, "4", sortKey, highlighted4, Brushes.Silver, highlightedSeries4, Brushes.CadetBlue);
+
+        await Task.Delay(delay); 
     }
 
-    
-    private async Task<List<Dictionary<string, string>>> NaturalMergeSortImplementationAsync(
-        List<Dictionary<string, string>> data,
-        string attribute,
-        bool ascending,
-        int delay)
+    private async Task VisualCondition(List<Dictionary<string, string>> file1, List<Dictionary<string, string>> file2, List<Dictionary<string, string>> file3, string sortKey, Dictionary<string, string> highlighted2 = null, Dictionary<string, string> highlighted3 = null, Dictionary<string, string> highlighted1 = null, List<Dictionary<string, string>> highlightedSeries2 = null, List<Dictionary<string, string>> highlightedSeries3 = null)
     {
-        bool isNumeric = long.TryParse(data.First()[attribute], out _);
-        List<List<Dictionary<string, string>>> blocks = new();
-        List<Dictionary<string, string>> currentBlock = new();
+        SortCanvas.Children.Clear();
+        double canvasWidth = SortCanvas.ActualWidth;
+        double blockWidth = canvasWidth / 3;
 
-        for (int i = 0; i < data.Count; i++)
+        DrawingBlock(file1, blockWidth, 0, "1", sortKey, highlighted1, Brushes.Turquoise);
+        DrawingBlock(file2, blockWidth, blockWidth, "2", sortKey, highlighted2, Brushes.Turquoise, highlightedSeries2, Brushes.MediumSeaGreen);
+        DrawingBlock(file3, blockWidth, 2 * blockWidth, "3", sortKey, highlighted3, Brushes.PapayaWhip, highlightedSeries3, Brushes.BurlyWood);
+        
+        await Task.Delay(delay);
+    }
+    
+    private async Task NaturalMergeSort(List<Dictionary<string, string>> table, string sortKey)
+    {
+        int n = table.Count;
+        int step = 1;
+
+        while (true)
         {
-            if (i > 0)
-            {
-                bool isCurrentLess = isNumeric
-                    ? ascending
-                        ? Convert.ToInt64(data[i - 1][attribute]) > Convert.ToInt64(data[i][attribute])
-                        : Convert.ToInt64(data[i - 1][attribute]) < Convert.ToInt64(data[i][attribute])
-                    : ascending
-                        ? string.Compare(data[i - 1][attribute], data[i][attribute]) > 0
-                        : string.Compare(data[i - 1][attribute], data[i][attribute]) < 0;
+            var file2 = new List<Dictionary<string, string>>();
+            var file3 = new List<Dictionary<string, string>>();
+            bool writeTo2 = true;
 
-                if (isCurrentLess)
+            Logs($"\nШаг {step}: Начинаем разбиение исходного массива на естественные серии.");
+            int i = 0;
+            while (i < n)
+            {
+                var series = new List<Dictionary<string, string>>();
+                series.Add(table[i]);
+                Logs($"Создаём новую серию, добавляем элемент {table[i][sortKey]}");
+                Dictionary<string, string> highlighted1 = table[i];
+                await VisualCondition(table, file2, file3, sortKey, highlighted1: highlighted1);
+                
+                while (i + 1 < n && CompareValues(table[i][sortKey], table[i + 1][sortKey]) <= 0)
                 {
-                    blocks.Add(currentBlock);
-                    currentBlock = new();
+                    i++;
+                    series.Add(table[i]);
+                    Logs($"Добавление элемента {table[i][sortKey]} в текущую серию.");
+                    highlighted1 = table[i];
+                    await VisualCondition(table, file2, file3, sortKey, highlighted1: highlighted1);
+                }
+                i++;
+                
+                if (writeTo2)
+                {
+                    file2.AddRange(series);
+                    Logs($"Серия {string.Join(", ", series.Select(row => row[sortKey]))} загружена в файл 2.");
+                }
+                else
+                {
+                    file3.AddRange(series);
+                    Logs($"Серия {string.Join(", ", series.Select(row => row[sortKey]))} загружена в файл 3.");
+                }
+
+                writeTo2 = !writeTo2;
+
+                await VisualCondition(table, file2, file3, sortKey);
+            }
+
+            Logs($"\nПосле разбиения:\n2: {string.Join(", ", file2.Select(row => row[sortKey]))}\n3: {string.Join(", ", file3.Select(row => row[sortKey]))}");
+
+            if (file3.Count == 0)
+            {
+                Logs("Файл 3 пуст. Сортировка завершена.");
+                return;
+            }
+
+            Logs("\nНачинаем слияние файлов 2 и 3 обратно в файл 1.");
+            table.Clear();
+            int Index2 = 0, Index3 = 0;
+
+            while (Index2 < file2.Count || Index3 < file3.Count)
+            { 
+                int End2 = Index2;
+                int End3 = Index3;
+
+                if (Index2 < file2.Count)
+                {
+                    End2++;
+                    while (End2 < file2.Count && CompareValues(file2[End2 - 1][sortKey], file2[End2][sortKey]) <= 0)
+                    {
+                        End2++;
+                    }
+                }
+
+                if (Index3 < file3.Count)
+                {
+                    End3++;
+                    while (End3 < file3.Count && CompareValues(file3[End3 - 1][sortKey], file3[End3][sortKey]) <= 0)
+                    {
+                        End3++;
+                    }
+                }
+
+                Logs($"\nПодготавливаем к слиянию серии из файла 2: {string.Join(", ", file2.GetRange(Index2, End2 - Index2).Select(row => row[sortKey]))}");
+                Logs($"Подготавливаем к слиянию серии из файла 3: {string.Join(", ", file3.GetRange(Index3, End3 - Index3).Select(row => row[sortKey]))}");
+                await VisualCondition(table, file2, file3, sortKey, highlightedSeries2: file2.GetRange(Index2, End2 - Index2), highlightedSeries3: file3.GetRange(Index3, End3 - Index3));
+                
+                while (Index2 < End2 || Index3 < End3)
+                {
+                    Dictionary<string, string> highlighted2 = Index2 < End2 ? file2[Index2] : null;
+                    Dictionary<string, string> highlighted3 = Index3 < End3 ? file3[Index3] : null;
+                    await VisualCondition(table, file2, file3, sortKey, highlighted2, highlighted3);
+
+                    if (Index2 < End2 && (Index3 >= End3 || CompareValues(file2[Index2][sortKey], file3[Index3][sortKey]) <= 0))
+                    {
+                        Logs($"Сравнение: {file2[Index2][sortKey]} (из 2) < {file3.ElementAtOrDefault(Index3)?[sortKey]} (из 3): извлекаем {file2[Index2][sortKey]} из 2.");
+                        table.Add(file2[Index2]);
+                        file2.RemoveAt(Index2);
+                        End2--;
+                        await VisualCondition(table, file2, file3, sortKey);
+                    }
+                    else if (Index3 < End3)
+                    {
+                        Logs($"Сравнение: {file3[Index3][sortKey]} (из 3) <= {file2.ElementAtOrDefault(Index2)?[sortKey]} (из 2): извлекаем {file3[Index3][sortKey]} из 3.");
+                        table.Add(file3[Index3]);
+                        file3.RemoveAt(Index3);
+                        End3--;
+                        await VisualCondition(table, file2, file3, sortKey);
+                    }
                 }
             }
-            currentBlock.Add(data[i]);
+
+            Logs($"\nПосле слияния: {string.Join(", ", table.Select(row => row[sortKey]))}");
+            await VisualCondition(table, file2, file3, sortKey);
+
+            step++;
         }
-
-        if (currentBlock.Count > 0)
-            blocks.Add(currentBlock);
-
-        List<List<Dictionary<string, string>>> previousBlocks = null;
-
-        // Показ начальных блоков
-        await DisplaySortingStepsAsync(blocks, delay, attribute);
-
-        // Выполняем слияние
-        while (blocks.Count > 1)
-        {
-            previousBlocks = new List<List<Dictionary<string, string>>>(blocks.Select(block => new List<Dictionary<string, string>>(block)));
-            blocks = MultiWayMerge(blocks, attribute, isNumeric, ascending);
-            await DisplaySortingStepsAsync(blocks, delay, attribute, previousBlocks);
-        }
-
-        return blocks.First();
     }
 
-
-
-    private async Task NaturalMergeSortAsync(string attribute, bool ascending, int delay)
+    private async Task MultiWayMergeSort(List<Dictionary<string, string>> table, string sortKey)
     {
-        tableData = await NaturalMergeSortImplementationAsync(tableData, attribute, ascending, delay);
-        MessageBox.Show("Естественное слияние завершено!");
-    }
-    
-    private async Task MultiWayMergeSortAsync(string attribute, bool ascending, int delay)
-    {
-        tableData = await NaturalMergeSortImplementationAsync(tableData, attribute, ascending, delay);
-        MessageBox.Show("Многопутевое слияние завершено!");
-    }
-    
-    private async Task<List<Dictionary<string, string>>> DirectSortAsync(List<Dictionary<string, string>> data, string attribute, bool ascending, int delay)
-    {
-        bool isNumeric = long.TryParse(data.First()[attribute], out _);
+        int n = table.Count;
+        int seriesLength = 1;
+        int step = 1;
 
-        for (int i = 1; i < data.Count; i++)
+        while (seriesLength < n)
         {
-            var current = data[i];
-            int j = i - 1;
+            Logs($"Шаг {step}: Длина цепей = {seriesLength}");
+            
+            var file2 = new List<Dictionary<string, string>>();
+            var file3 = new List<Dictionary<string, string>>();
+            var file4 = new List<Dictionary<string, string>>();
 
-            while (j >= 0)
+            int i = 0;
+            while (i < table.Count)
             {
-                bool isSwapNeeded = isNumeric
-                    ? ascending
-                        ? Convert.ToInt64(data[j][attribute]) > Convert.ToInt64(current[attribute])
-                        : Convert.ToInt64(data[j][attribute]) < Convert.ToInt64(current[attribute])
-                    : ascending
-                        ? string.Compare(data[j][attribute], current[attribute]) > 0
-                        : string.Compare(data[j][attribute], current[attribute]) < 0;
+                Logs("Начинаем разбиение массива 1 на файлы 2, 3 и 4.");
 
-                if (!isSwapNeeded) break;
+                for (int j = 0; j < seriesLength && i < table.Count; j++)
+                {
+                    if (i < table.Count)
+                    {
+                        Dictionary<string, string> highlighted1 = table[i];
+                        await VisualCondition(table, file2, file3, file4, sortKey, highlighted1: highlighted1);
+                        file2.Add(table[i]);
+                        Logs($"Добавление элемента {table[i][sortKey]} в файл 2.");
+                        table.RemoveAt(i);
+                    }
+                }
 
-                data[j + 1] = data[j];
-                j--;
-            }
-            data[j + 1] = current;
+                for (int j = 0; j < seriesLength && i < table.Count; j++)
+                {
+                    if (i < table.Count)
+                    {
+                        Dictionary<string, string> highlighted1 = table[i];
+                        await VisualCondition(table, file2, file3, file4, sortKey, highlighted1: highlighted1);
+                        file3.Add(table[i]);
+                        Logs($"Добавление элемента {table[i][sortKey]} в файл 3.");
+                        table.RemoveAt(i);
+                    }
+                }
 
-            // Обновляем отображение после каждого шага
-            await DisplaySortingStepsAsync(new List<List<Dictionary<string, string>>> { data }, delay);
-        }
+                for (int j = 0; j < seriesLength && i < table.Count; j++)
+                {
+                    if (i < table.Count)
+                    {
+                        Dictionary<string, string> highlighted1 = table[i];
+                        await VisualCondition(table, file2, file3, file4, sortKey, highlighted1: highlighted1);
+                        file4.Add(table[i]);
+                        Logs($"Добавление элемента {table[i][sortKey]} в файл 4.");
+                        table.RemoveAt(i);
+                    }
+                }
 
-        return data;
-    }
-    
-
-    private List<List<Dictionary<string, string>>> MultiWayMerge(
-        List<List<Dictionary<string, string>>> blocks,
-        string attribute,
-        bool isNumeric,
-        bool ascending)
-    {
-        var priorityQueue = new SortedDictionary<
-            (string, int), Dictionary<string, string>>(new ComparerForMerge(isNumeric, ascending));
-
-        // Индексы текущих элементов для каждого блока
-        var indices = new int[blocks.Count];
-
-        // Инициализация очереди
-        for (int i = 0; i < blocks.Count; i++)
-        {
-            if (blocks[i].Count > 0)
-            {
-                var key = (blocks[i][0][attribute], i);
-                priorityQueue.Add(key, blocks[i][0]);
-            }
-        }
-
-        var merged = new List<Dictionary<string, string>>();
-
-        while (priorityQueue.Count > 0)
-        {
-            // Извлечение минимального элемента
-            var firstKey = priorityQueue.First().Key;
-            var currentRecord = priorityQueue.First().Value;
-            priorityQueue.Remove(firstKey);
-
-            merged.Add(currentRecord);
-
-            int blockIndex = firstKey.Item2;
-            indices[blockIndex]++;
-
-            // Если в блоке остались элементы, добавляем следующий элемент в очередь
-            if (indices[blockIndex] < blocks[blockIndex].Count)
-            {
-                var nextKey = (blocks[blockIndex][indices[blockIndex]][attribute], blockIndex);
-                priorityQueue.Add(nextKey, blocks[blockIndex][indices[blockIndex]]);
-            }
-        }
-
-        return new List<List<Dictionary<string, string>>> { merged };
-    }
-    
-    private class ComparerForMerge : IComparer<(string, int)>
-    {
-        private readonly bool isNumeric;
-        private readonly bool ascending;
-
-        public ComparerForMerge(bool isNumeric, bool ascending)
-        {
-            this.isNumeric = isNumeric;
-            this.ascending = ascending;
-        }
-
-        public int Compare((string, int) x, (string, int) y)
-        {
-            int comparison;
-            if (isNumeric)
-            {
-                comparison = Convert.ToInt64(x.Item1).CompareTo(Convert.ToInt64(y.Item1));
-            }
-            else
-            {
-                comparison = string.Compare(x.Item1, y.Item1, StringComparison.Ordinal);
+                await VisualCondition(table, file2, file3, file4, sortKey);
             }
 
-            return ascending ? comparison : -comparison;
+            Logs($"После разбиения:\n2: {string.Join(", ", file2.Select(row => row[sortKey]))}\n3: {string.Join(", ", file3.Select(row => row[sortKey]))}\n4: {string.Join(", ", file4.Select(row => row[sortKey]))}");
+            
+            Logs("\nНачало слияния файлов 2, 3 и 4 обратно в файл 1.");
+            table.Clear();
+            int Index2 = 0, Index3 = 0, Index4 = 0;
+
+            while (Index2 < file2.Count || Index3 < file3.Count || Index4 < file4.Count)
+            {
+                int End2 = Math.Min(Index2 + seriesLength, file2.Count);
+                int End3 = Math.Min(Index3 + seriesLength, file3.Count);
+                int End4 = Math.Min(Index4 + seriesLength, file4.Count);
+                
+                await VisualCondition(table, file2, file3, file4, sortKey, highlightedSeries2: file2.GetRange(Index2, End2 - Index2), highlightedSeries3: file3.GetRange(Index3, End3 - Index3), highlightedSeries4: file4.GetRange(Index4, End4 - Index4));
+                
+                while (Index2 < End2 || Index3 < End3 || Index4 < End4)
+                {
+                    Dictionary<string, string> highlighted2 = Index2 < End2 ? file2[Index2] : null;
+                    Dictionary<string, string> highlighted3 = Index3 < End3 ? file3[Index3] : null;
+                    Dictionary<string, string> highlighted4 = Index4 < End4 ? file4[Index4] : null;
+                    await VisualCondition(table, file2, file3, file4, sortKey, highlighted2, highlighted3, highlighted4);
+
+                    if (Index2 < End2 && (Index3 >= End3 || CompareValues(file2[Index2][sortKey], file3[Index3][sortKey]) <= 0) && (Index4 >= End4 || CompareValues(file2[Index2][sortKey], file4[Index4][sortKey]) <= 0))
+                    {
+                        Logs($"Сравнение: {file2[Index2][sortKey]} (из 2) < {file3.ElementAtOrDefault(Index3)?[sortKey]} (из 3) и {file4.ElementAtOrDefault(Index4)?[sortKey]} (из 4): извлекаем {file2[Index2][sortKey]} из 2.");
+                        table.Add(file2[Index2]);
+                        file2.RemoveAt(Index2);
+                        End2--;
+                        await VisualCondition(table, file2, file3, file4, sortKey);
+                    }
+                    else if (Index3 < End3 && (Index4 >= End4 || CompareValues(file3[Index3][sortKey], file4[Index4][sortKey]) <= 0))
+                    {
+                        Logs($"Сравнение: {file3[Index3][sortKey]} (из 3) <= {file4.ElementAtOrDefault(Index4)?[sortKey]} (из 4): извлекаем {file3[Index3][sortKey]} из 3.");
+                        table.Add(file3[Index3]);
+                        file3.RemoveAt(Index3);
+                        End3--;
+                        await VisualCondition(table, file2, file3, file4, sortKey);
+                    }
+                    else if (Index4 < End4)
+                    {
+                        Logs($"извлекаем {file4[Index4][sortKey]} из 4.");
+                        table.Add(file4[Index4]);
+                        file4.RemoveAt(Index4);
+                        End4--;
+                        await VisualCondition(table, file2, file3, file4, sortKey);
+                    }
+                }
+            }
+
+            Logs($"\nПосле слияния: {string.Join(", ", table.Select(row => row[sortKey]))}");
+            await VisualCondition(table, file2, file3, file4, sortKey);
+            
+            seriesLength *= 3; 
+            step++;
         }
     }
 
-    
-
-    private void SaveResultButton_Click(object sender, RoutedEventArgs e)
+    private async Task DirectMergeSort(List<Dictionary<string, string>> table, string sortKey)
     {
-        var saveFileDialog = new Microsoft.Win32.SaveFileDialog
+        int n = table.Count;
+        int seriesLength = 1;
+        int step = 1; 
+
+        
+        var file2 = new List<Dictionary<string, string>>();
+        var file3 = new List<Dictionary<string, string>>();
+
+        while (seriesLength < n)
         {
-            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            Logs($"\nШаг {step}: Длина цепей = {seriesLength}");
+            
+            file2.Clear();
+            file3.Clear();
+
+            int i = 0;
+            while (i < table.Count)
+            {
+                Logs("\nНачало разбиения массива 1 на файлы 2 и 3.");
+                for (int j = 0; j < seriesLength && i < table.Count; j++)
+                {
+                    Logs($"Подготовка элемента {table[i][sortKey]} в файл 2.");
+                    Dictionary<string, string> highlightedA = table[i];
+                    await VisualCondition(table, file2, file3, sortKey, highlighted1: highlightedA);
+
+                    file2.Add(table[i]);
+                    Logs($"Добавление элемента {table[i][sortKey]} в файл 2 и удаление из файла 1.");
+                    table.RemoveAt(i);
+                }
+
+                for (int j = 0; j < seriesLength && i < table.Count; j++)
+                {
+                    Logs($"Подготовка к перемещению {table[i][sortKey]} в файл 3.");
+                    Dictionary<string, string> highlightedA = table[i];
+                    await VisualCondition(table, file2, file3, sortKey, highlighted1: highlightedA);
+
+                    file3.Add(table[i]);
+                    Logs($"Добавление элемента {table[i][sortKey]} в файл 3 и удаление из файла 1.");
+                    table.RemoveAt(i);
+                }
+
+                Logs("\nТекущее состояние:");
+                await VisualCondition(table, file2, file3, sortKey);
+            }
+
+            Logs($"\nПосле разбиения:\n2: {string.Join(", ", file2.Select(row => row[sortKey]))}\n3: {string.Join(", ", file3.Select(row => row[sortKey]))}");
+            Logs("\nНачинаем слияние файлов 2 и 3 обратно в файл 1.");
+            table.Clear();
+            int bIndex = 0, cIndex = 0;
+
+            while (bIndex < file2.Count || cIndex < file3.Count)
+            {
+                int bEnd = Math.Min(bIndex + seriesLength, file2.Count);
+                int cEnd = Math.Min(cIndex + seriesLength, file3.Count);
+
+                Logs($"\nПодготавливаем к слиянию серии из файла 2: {string.Join(", ", file2.GetRange(bIndex, bEnd - bIndex).Select(row => row[sortKey]))}");
+                Logs($"Подготавливаем к слиянию серии из файла 3: {string.Join(", ", file3.GetRange(cIndex, cEnd - cIndex).Select(row => row[sortKey]))}");
+                await VisualCondition(table, file2, file3, sortKey, highlightedSeries2: file2.GetRange(bIndex, bEnd - bIndex), highlightedSeries3: file3.GetRange(cIndex, cEnd - cIndex));
+
+                while (bIndex < bEnd || cIndex < cEnd)
+                {
+                    Dictionary<string, string> highlightedB = bIndex < bEnd ? file2[bIndex] : null;
+                    Dictionary<string, string> highlightedC = cIndex < cEnd ? file3[cIndex] : null;
+                    await VisualCondition(table, file2, file3, sortKey, highlightedB, highlightedC);
+
+                    if (bIndex < bEnd && (cIndex >= cEnd || CompareValues(file2[bIndex][sortKey], file3[cIndex][sortKey]) <= 0))
+                    {
+                        Logs($"Сравнение: {file2[bIndex][sortKey]} (из 2) < {file3.ElementAtOrDefault(cIndex)?[sortKey]} (из 3): извлекаем {file2[bIndex][sortKey]} из 2.");
+                        table.Add(file2[bIndex]);
+                        file2.RemoveAt(bIndex);
+                        bEnd--;
+                        await VisualCondition(table, file2, file3, sortKey);
+                    }
+                    else if (cIndex < cEnd)
+                    {
+                        Logs($"Сравнение: {file3[cIndex][sortKey]} (из 3) <= {file2.ElementAtOrDefault(bIndex)?[sortKey]} (из 2): извлекаем {file3[cIndex][sortKey]} из 3.");
+                        table.Add(file3[cIndex]);
+                        file3.RemoveAt(cIndex);
+                        cEnd--;
+                        await VisualCondition(table, file2, file3, sortKey);
+                    }
+                }
+            }
+
+            Logs($"\nПосле слияния: {string.Join(", ", table.Select(row => row[sortKey]))}");
+            await VisualCondition(table, file2, file3, sortKey);
+            
+            seriesLength *= 2;
+            step++;
+        }
+    }
+
+    private void DrawingBlock(List<Dictionary<string, string>> block, double blockWidth, double offsetX, string label, string sortKey, Dictionary<string, string> highlighted = null, Brush highlightColor = null, List<Dictionary<string, string>> highlightedSeries = null, Brush seriesHighlightColor = null)
+    {
+        double rectangleHeight = block.Count * 20;
+
+        var rectangle = new Rectangle
+        {
+            Width = blockWidth - 10,
+            Height = rectangleHeight,
+            Fill = defaultColor,
+            Stroke = Brushes.Black,
+            StrokeThickness = 1
+        };
+        
+        var blockLabel = new TextBlock
+        {
+            Text = label,
+            Foreground = Brushes.Black,
+            FontSize = 14,
+            FontWeight = FontWeights.Bold,
+            TextAlignment = TextAlignment.Center
         };
 
-        if (saveFileDialog.ShowDialog() == true)
+        Canvas.SetLeft(rectangle, offsetX);
+        Canvas.SetTop(rectangle, SortCanvas.ActualHeight - rectangleHeight - 20);
+        SortCanvas.Children.Add(rectangle);
+        Canvas.SetLeft(blockLabel, offsetX + blockWidth / 2 - 30);
+        Canvas.SetTop(blockLabel, SortCanvas.ActualHeight - rectangleHeight - 40);
+        SortCanvas.Children.Add(blockLabel);
+
+        for (int j = 0; j < block.Count; j++)
         {
-            outputFilePath = saveFileDialog.FileName;
-            OutputFileTextBox.Text = outputFilePath;
-            SaveDataToFile();
+            if (block[j] == null)
+            {
+                continue;
+            }
+
+            string key = block[j][headers[0]];
+            string value = block[j][sortKey]; 
+
+            var labelItem = new TextBlock
+            {
+                Text = $"{key} ({value})",
+                Foreground = Brushes.Gray,
+                Background = (block[j] == highlighted && highlightColor != null) ? highlightColor :
+                             (highlightedSeries != null && highlightedSeries.Contains(block[j]) && seriesHighlightColor != null) ? seriesHighlightColor :
+                             Brushes.Azure,
+                TextAlignment = TextAlignment.Center,
+                Width = blockWidth - 10,
+                Height = 20
+            };
+
+            Canvas.SetLeft(labelItem, offsetX);
+            Canvas.SetTop(labelItem, SortCanvas.ActualHeight - rectangleHeight + j * 20 - 20);
+            SortCanvas.Children.Add(labelItem);
         }
     }
-
-    private void SaveDataToFile()
+    private int CompareValues(string value1, string value2)
     {
-        var headers = tableData.First().Keys.ToArray();
-        var lines = new List<string> { string.Join(",", headers) };
-
-        foreach (var record in tableData)
+        if (double.TryParse(value1, out var number) && double.TryParse(value2, out var num2))
         {
-            lines.Add(string.Join(",", record.Values));
+            return number.CompareTo(num2);
         }
-
-        File.WriteAllLines(outputFilePath, lines);
-        MessageBox.Show("Результаты сохранены в файл!");
+        return string.Compare(value1, value2, StringComparison.Ordinal);
     }
 }
